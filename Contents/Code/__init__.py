@@ -3,17 +3,18 @@
 # 3.0 API update by ToMM
 
 import countrycode
+import json,urllib
 
 # apiary.io debugging URL
 # BASE_URL = 'http://private-ad99a-themoviedb.apiary.io/3'
 
-SEARCH_BASE_URL = 'http://ax.itunes.apple.com/WebObjects/MZStoreServices.woa/wa/wsSearch'
+SEARCH_BASE_URL = 'https://itunes.apple.com/search'
 
 ID_BASE_URL = 'https://itunes.apple.com/lookup'
 
 # Movies
-ITUNES_STORE_MOVIE_SEARCH = '%s?term=%%s&country=%s&entity=movie' % (SEARCH_BASE_URL, "us")
-ITUNES_STORE_MOVIE = '%s?id=%%s&country=%s' % (ID_BASE_URL, "us")
+ITUNES_STORE_MOVIE_SEARCH = '%s?term=%%s&country=%%s&entity=movie' % (SEARCH_BASE_URL)
+ITUNES_STORE_MOVIE = '%s?id=%%s&country=%%s' % (ID_BASE_URL)
 
 LANGUAGES = [
              Locale.Language.English, Locale.Language.Czech, Locale.Language.Danish, Locale.Language.German,
@@ -39,7 +40,8 @@ def GetJSON(url, cache_time=CACHE_1MONTH):
   itunes_store_dict = None
 
   try:
-    itunes_store_dict = JSON.ObjectFromURL(url, sleep=2.0, headers={'Accept': 'application/json'}, cacheTime=cache_time)
+    data = urllib.urlopen(url).read()
+    itunes_store_dict = json.loads(data)
   except:
     Log('Error fetching JSON from The iTunes Store.')
 
@@ -52,9 +54,11 @@ class iTunesStoreAgent(Agent.Movies):
   primary_provider = True
   languages = LANGUAGES
   accepts_from = ['com.plexapp.agents.localmedia']
-  contributes_to = ['com.plexapp.agents.imdb']
+  contributes_to = ['com.plexapp.agents.imdb', 'com.plexapp.agents.themoviedb']
 
   def search(self, results, media, lang, manual):
+
+    Log('In the search function!!!!!!')
 
     # If search is initiated by a different, primary metadata agent.
     # This requires the other agent to use the itunes id as key.
@@ -66,7 +70,8 @@ class iTunesStoreAgent(Agent.Movies):
     else:
       # If this a manual search (Fix Incorrect Match). We then pass the itunes id
       if manual:
-        itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE % (media.primary_metadata.id))
+        itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE_SEARCH % (media.name, countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
+        Log('Searching with url: ' + ITUNES_STORE_MOVIE_SEARCH % (media.name, countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
 
         if isinstance(itunes_store_dict, dict) and 'results' in itunes_store_dict and len(itunes_store_dict['results']) == 1:
 
@@ -97,10 +102,10 @@ class iTunesStoreAgent(Agent.Movies):
         # try the search again with the original.
         #
         stripped_name = String.StripDiacritics(media.name)
-        itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE_SEARCH % (String.Quote(stripped_name)))
+        itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE_SEARCH % (String.Quote(stripped_name), countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
         if media.name != stripped_name and (itunes_store_dict == None or len(itunes_store_dict['results']) == 0):
           Log('No results for title modified by strip diacritics, searching again with the original: ' + media.name)
-          itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE_SEARCH % (String.Quote(media.name)))
+          itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE_SEARCH % (String.Quote(media.name), countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
 
         if isinstance(itunes_store_dict, dict) and 'results' in itunes_store_dict:
           for movie in enumerate(itunes_store_dict['results']):
@@ -133,9 +138,9 @@ class iTunesStoreAgent(Agent.Movies):
 
   def update(self, metadata, media, lang):
 
+    Log('In the update function!!!!!!')
 
-
-    itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE % (metadata.id))
+    itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE % (metadata.id, countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
 
     if not isinstance(itunes_store_dict, dict) or 'results' not in itunes_store_dict or len(itunes_store_dict['results']) == 0:
       return None
@@ -169,22 +174,29 @@ class iTunesStoreAgent(Agent.Movies):
 
     # Genres.
     metadata.genres.clear()
-    metadata.genres.add(itunes_store_dict['trackTimeMillis'].strip())
+    metadata.genres.add(itunes_store_dict['primaryGenreName'].strip())
 
     # Collections.
     metadata.collections.clear()
     if Prefs['collections'] and itunes_store_dict['collectionName']:
       metadata.collections.add(itunes_store_dict['collectionName'])
 
-    # Note: for TMDB artwork, number of votes is a good predictor of poster quality. Ratings are assigned
-    # using a Baysean average that appears to be poorly calibrated, so ratings are almost always between
-    # 5 and 6 or zero.  Consider both of these, weighting them according to the POSTER_SCORE_RATIO.
 
-    # No votes get zero, use TMDB's apparent initial Baysean prior mean of 5 instead.
     valid_names = list()
 
     if itunes_store_dict['artworkUrl100']:
-      valid_names.append(itunes_store_dict['artworkUrl100'])
+        url = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "2000x2000bb-100")
+
+        if url not in metadata.posters:
+            try:
+                metadata.posters[url] = Proxy.Preview(HTTP.Request(url, sleep=0.5).content, sort_order=100)
+                valid_names.append(url)
+            except:
+                try:
+                    metadata.posters[itunes_store_dict['artworkUrl100']] = Proxy.Preview(HTTP.Request(itunes_store_dict['artworkUrl100'], sleep=0.5).content, sort_order=1)
+                    valid_names.append(itunes_store_dict['artworkUrl100'])
+                except:
+                  pass
 
     metadata.posters.validate_keys(valid_names)
 

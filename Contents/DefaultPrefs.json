@@ -6,14 +6,8 @@
         "default": "false"
     },
     {
-        "id": "localart",
-        "label": "Prefer artwork based on library language",
-        "type": "bool",
-        "default": "true"
-    },
-    {
         "id": "adult",
-        "label": "Include adult content",
+        "label": "Include explicit content",
         "type": "bool",
         "default": "false"
     },
