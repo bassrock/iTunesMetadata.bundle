@@ -12,10 +12,18 @@ SEARCH_BASE_URL = 'http://ax.itunes.apple.com/WebObjects/MZStoreServices.woa/wa/
 ID_BASE_URL = 'https://itunes.apple.com/lookup'
 
 # Movies
-ITUNES_STORE_MOVIE_SEARCH = '%s?term=%%s&country=%s&entity=movie' % (SEARCH_BASE_URL, countrycode.COUNTRY_TO_CODE[Prefs["Country"]])
-ITUNES_STORE_MOVIE = '%s?id=%%s&country=%s' % (ID_BASE_URL, countrycode.COUNTRY_TO_CODE[Prefs["Country"]])
+ITUNES_STORE_MOVIE_SEARCH = '%s?term=%%s&country=%s&entity=movie' % (SEARCH_BASE_URL, "us")
+ITUNES_STORE_MOVIE = '%s?id=%%s&country=%s' % (ID_BASE_URL, "us")
 
-
+LANGUAGES = [
+             Locale.Language.English, Locale.Language.Czech, Locale.Language.Danish, Locale.Language.German,
+             Locale.Language.Greek, Locale.Language.Spanish, Locale.Language.Finnish, Locale.Language.French,
+             Locale.Language.Hebrew, Locale.Language.Croatian, Locale.Language.Hungarian, Locale.Language.Italian,
+             Locale.Language.Latvian, Locale.Language.Dutch, Locale.Language.Norwegian, Locale.Language.Polish,
+             Locale.Language.Portuguese, Locale.Language.Russian, Locale.Language.Slovak, Locale.Language.Swedish,
+             Locale.Language.Thai, Locale.Language.Turkish, Locale.Language.Vietnamese, Locale.Language.Chinese,
+             Locale.Language.Korean
+            ]
 
 ####################################################################################################
 def Start():
@@ -42,6 +50,7 @@ class iTunesStoreAgent(Agent.Movies):
 
   name = 'iTunes Store'
   primary_provider = True
+  languages = LANGUAGES
   accepts_from = ['com.plexapp.agents.localmedia']
   contributes_to = ['com.plexapp.agents.imdb']
 
