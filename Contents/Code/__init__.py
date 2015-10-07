@@ -43,7 +43,7 @@ def GetJSON(url, cache_time=CACHE_1MONTH):
     data = urllib.urlopen(url).read()
     itunes_store_dict = json.loads(data)
   except:
-    Log('Error fetching JSON from The iTunes Store.')
+    Log('Error fetching JSON from The iTunes Store. URL: ' + url)
 
   return itunes_store_dict
 
@@ -51,10 +51,9 @@ def GetJSON(url, cache_time=CACHE_1MONTH):
 class iTunesStoreAgent(Agent.Movies):
 
   name = 'iTunes Store'
-  primary_provider = True
   languages = LANGUAGES
-  accepts_from = ['com.plexapp.agents.localmedia']
   contributes_to = ['com.plexapp.agents.imdb', 'com.plexapp.agents.themoviedb']
+  primary_provider = False
 
   def search(self, results, media, lang, manual):
 
@@ -69,78 +68,80 @@ class iTunesStoreAgent(Agent.Movies):
       ))
     else:
       # If this a manual search (Fix Incorrect Match). We then pass the itunes id
-      if manual:
-        itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE_SEARCH % (media.name, countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
-        Log('Searching with url: ' + ITUNES_STORE_MOVIE_SEARCH % (media.name, countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
+        if manual:
+          itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE_SEARCH % (media.name, countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
+          Log('Searching with url: ' + ITUNES_STORE_MOVIE_SEARCH % (media.name, countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
 
-        if isinstance(itunes_store_dict, dict) and 'results' in itunes_store_dict and len(itunes_store_dict['results']) == 1:
+          if isinstance(itunes_store_dict, dict) and 'results' in itunes_store_dict and len(itunes_store_dict['results']) == 1:
 
-          ourresult = itunes_store_dict['results'][0]
+            ourresult = itunes_store_dict['results'][0]
 
-          results.Append(MetadataSearchResult(
-            id = str(ourresult['trackId']),
-            name = ourresult['trackName'],
-            year = int(ourresult['releaseDate'].split('-')[0]),
-            score = 100,
-            lang = lang
-          ))
+            results.Append(MetadataSearchResult(
+              id = str(ourresult['trackId']),
+              name = ourresult['trackName'],
+              year = int(ourresult['releaseDate'].split('-')[0]),
+              score = 100,
+              lang = lang
+            ))
 
-      # If this is an automatic search and iTunes Store agent is used as a primary agent.
-      else:
-        if media.year and int(media.year) > 1900:
-          year = media.year
+        # If this is an automatic search and iTunes Store agent is used as a primary agent.
         else:
-          year = ''
+          if media.year and int(media.year) > 1900:
+            year = media.year
+          else:
+            year = ''
 
-        include_adult = 'false'
-        if Prefs['adult']:
-          include_adult = 'true'
+          include_adult = 'false'
+          if Prefs['adult']:
+            include_adult = 'true'
 
-        # Historically we've StrippedDiacritics() here, but this is a pretty aggressive function that won't pass
-        # anything that can't be encoded to ASCII, and as such has a tendency to nuke whole titles in, e.g., Asian
-        # languages (See GHI #26).  If we have a string that was modified by StripDiacritics() and we get no results,
-        # try the search again with the original.
-        #
-        stripped_name = String.StripDiacritics(media.name)
-        itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE_SEARCH % (String.Quote(stripped_name), countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
-        if media.name != stripped_name and (itunes_store_dict == None or len(itunes_store_dict['results']) == 0):
-          Log('No results for title modified by strip diacritics, searching again with the original: ' + media.name)
-          itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE_SEARCH % (String.Quote(media.name), countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
+          # Historically we've StrippedDiacritics() here, but this is a pretty aggressive function that won't pass
+          # anything that can't be encoded to ASCII, and as such has a tendency to nuke whole titles in, e.g., Asian
+          # languages (See GHI #26).  If we have a string that was modified by StripDiacritics() and we get no results,
+          # try the search again with the original.
+          #
+          stripped_name = String.StripDiacritics(media.name)
+          itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE_SEARCH % (String.Quote(stripped_name), countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
+          if media.name != stripped_name and (itunes_store_dict == None or len(itunes_store_dict['results']) == 0):
+            Log('No results for title modified by strip diacritics, searching again with the original: ' + media.name)
+            itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE_SEARCH % (String.Quote(media.name), countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
 
-        if isinstance(itunes_store_dict, dict) and 'results' in itunes_store_dict:
-          for movie in enumerate(itunes_store_dict['results']):
-            score = 90
-            score = score - abs(String.LevenshteinDistance(movie['trackName'].lower(), media.name.lower()))
+          Log(itunes_store_dict)
 
-            if 'releaseDate' in movie and movie['releaseDate']:
-              release_year = int(movie['releaseDate'].split('-')[0])
-            else:
-              release_year = None
+          if isinstance(itunes_store_dict, dict) and 'results' in itunes_store_dict:
+            for movie in enumerate(itunes_store_dict['results']):
+              score = 90
+              score = score - abs(String.LevenshteinDistance(movie['trackName'].lower(), media.name.lower()))
 
-            if media.year and int(media.year) > 1900 and release_year:
-              year_diff = abs(int(media.year) - release_year)
-
-              if year_diff <= 1:
-                score = score + 10
+              if 'releaseDate' in movie and movie['releaseDate']:
+                release_year = int(movie['releaseDate'].split('-')[0])
               else:
-                score = score - (5 * year_diff)
+                release_year = None
 
-            if score <= 0:
-              continue
-            else:
-              results.Append(MetadataSearchResult(
-                id = str(movie['trackId']),
-                name = movie['trackName'],
-                year = release_year,
-                score = score,
-                lang = lang
-              ))
+              if media.year and int(media.year) > 1900 and release_year:
+                year_diff = abs(int(media.year) - release_year)
+
+                if year_diff <= 1:
+                  score = score + 10
+                else:
+                  score = score - (5 * year_diff)
+
+              if score <= 0:
+                continue
+              else:
+                results.Append(MetadataSearchResult(
+                  id = str(movie['trackId']),
+                  name = movie['trackName'],
+                  year = release_year,
+                  #score = score,
+                  lang = lang
+                ))
 
   def update(self, metadata, media, lang):
 
     Log('In the update function!!!!!!')
 
-    itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE % (metadata.id, countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
+    itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE_SEARCH % (metadata.title, countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
 
     if not isinstance(itunes_store_dict, dict) or 'results' not in itunes_store_dict or len(itunes_store_dict['results']) == 0:
       return None
@@ -178,13 +179,12 @@ class iTunesStoreAgent(Agent.Movies):
 
     # Collections.
     metadata.collections.clear()
-    if Prefs['collections'] and itunes_store_dict['collectionName']:
+    if Prefs['collections'] and 'collectionName' in itunes_store_dict:
       metadata.collections.add(itunes_store_dict['collectionName'])
-
 
     valid_names = list()
 
-    if itunes_store_dict['artworkUrl100']:
+    if 'artworkUrl100' in itunes_store_dict['artworkUrl100']:
         url = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "2000x2000bb-100")
 
         if url not in metadata.posters:
