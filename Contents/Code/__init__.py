@@ -5,6 +5,11 @@
 import countrycode
 import json,urllib
 
+from urllib2 import urlopen
+from HTMLParser import HTMLParser
+from urlparse import urlparse
+from urlparse import parse_qs
+
 # apiary.io debugging URL
 # BASE_URL = 'http://private-ad99a-themoviedb.apiary.io/3'
 
@@ -15,6 +20,12 @@ ID_BASE_URL = 'https://itunes.apple.com/lookup'
 # Movies
 ITUNES_STORE_MOVIE_SEARCH = '%s?term=%%s&country=%%s&entity=movie' % (SEARCH_BASE_URL)
 ITUNES_STORE_MOVIE = '%s?id=%%s&country=%%s' % (ID_BASE_URL)
+FANTV_MOVIE = 'https://www.fan.tv/movies/%s'
+
+
+
+#The Movie DB
+THE_MOVIE_DB_IMDB_SEARCH_API = "https://api.themoviedb.org/3/find/%s?external_source=imdb_id&api_key=2798bf23aa9f616f20c1b1e212b2de8f"
 
 LANGUAGES = [
              Locale.Language.English, Locale.Language.Czech, Locale.Language.Danish, Locale.Language.German,
@@ -36,22 +47,49 @@ def Start():
 ####################################################################################################
 @expose
 def GetiTunesIDFromTheMovieDBID(the_movie_db_id):
-  #go to fan.tv with the id and parse the page for itunes
-  return "421072264"
+    url = FANTV_MOVIE % (the_movie_db_id)
+    Log(url)
+    #go to fan.tv with the id and parse the page for itunes
+    html = urlopen(url).read()
+    p = iTunesParser()
+    p.feed(html)
+    iTunesURL = p.iTunesURL
+    p.close()
+    Log(iTunesURL)
+    if iTunesURL is None:
+        return None
+
+    parsed_result = urlparse(iTunesURL)
+    result = parse_qs(parsed_result.query)
+
+    if "id" in result:
+        return result['id'][0]
+
+    return None
 
 ####################################################################################################
 @expose
 def GetiTunesIDFromIMDBID(imdb_id):
   #Run the GetTheMovieDBIDFromIMDBID
-  #get the movie db id from that api.
+  the_movie_db_id = GetTheMovieDBIDFromIMDBID(imdb_id)
   #Run the GetiTunesIDFromTheMovieDBID
-  return "421072264"
+  return GetiTunesIDFromTheMovieDBID(the_movie_db_id)
 ####################################################################################################
 @expose
 def GetTheMovieDBIDFromIMDBID(imdb_id):
   #search api of the movie db with the imdb id.
+  the_movie_dict = GetJSON(url=THE_MOVIE_DB_IMDB_SEARCH_API % (imdb_id))
 
-  return "421072264"
+  Log(THE_MOVIE_DB_IMDB_SEARCH_API % (imdb_id))
+
+  if not isinstance(the_movie_dict, dict) or 'movie_results' not in the_movie_dict or len(the_movie_dict['movie_results']) == 0:
+    Log('No Results from the movie db')
+    return None
+
+  the_movie_dict = the_movie_dict['movie_results'][0]
+  the_movie_db_id = the_movie_dict['id']
+
+  return the_movie_db_id
 ####################################################################################################
 def GetJSON(url, cache_time=CACHE_1MONTH):
 
@@ -92,12 +130,15 @@ class iTunesStoreAgent(Agent.Movies):
     itunes_id = None
 
     if RE_IMDB_ID.search(metadata.id):
-      imdb_id = RE_IMDB_ID.search(metadata.id)
-      itunes_id = GetiTunesIDFromIMDBID(imdb_id)
+      itunes_id = GetiTunesIDFromIMDBID(metadata.id)
+      if itunes_id == None:
+          return None
 
     elif media.primary_agent == 'com.plexapp.agents.themoviedb':
       moviedb_id = media.primary_metadata.id
       itunes_id = GetiTunesIDFromTheMovieDBID(moviedb_id)
+      if itunes_id is None:
+        return None
 
     Log('In the update function with the itunes id of ' + itunes_id)
 
@@ -107,8 +148,6 @@ class iTunesStoreAgent(Agent.Movies):
       return None
 
     itunes_store_dict = itunes_store_dict['results'][0]
-
-    Log(itunes_store_dict)
 
     # Title of the film.
     metadata.title = itunes_store_dict['trackName']
@@ -162,3 +201,22 @@ class iTunesStoreAgent(Agent.Movies):
     metadata.posters.validate_keys(valid_names)
 
 ####################################################################################################
+
+
+
+class iTunesParser(HTMLParser):
+
+  def __init__(self):
+    HTMLParser.__init__(self)
+    self.recording = 0
+    self.iTunesURL = None
+  def handle_starttag(self, tag, attrs):
+    if tag == 'a':
+      foundiTunes = False
+      for name, value in attrs:
+        if name == 'data-tooltip' and value == 'iTunes':
+          foundiTunes = True
+      if foundiTunes:
+        for name, value in attrs:
+            if name == 'href':
+                self.iTunesURL = value
