@@ -18,11 +18,10 @@ SEARCH_BASE_URL = 'https://itunes.apple.com/search'
 ID_BASE_URL = 'https://itunes.apple.com/lookup'
 
 # Movies
-ITUNES_STORE_MOVIE_SEARCH = '%s?term=%%s&country=%%s&entity=movie' % (SEARCH_BASE_URL)
 ITUNES_STORE_MOVIE = '%s?id=%%s&country=%%s' % (ID_BASE_URL)
 FANTV_MOVIE = 'https://www.fan.tv/movies/%s'
 
-
+FANTV_TV = 'https://www.fan.tv/shows/%s'
 
 #The Movie DB
 THE_MOVIE_DB_IMDB_SEARCH_API = "https://api.themoviedb.org/3/find/%s?external_source=imdb_id&api_key=2798bf23aa9f616f20c1b1e212b2de8f"
@@ -127,6 +126,8 @@ class iTunesStoreAgent(Agent.Movies):
 
   def update(self, metadata, media, lang):
 
+    Log("In the update function")
+
     itunes_id = None
 
     if RE_IMDB_ID.search(metadata.id):
@@ -184,20 +185,19 @@ class iTunesStoreAgent(Agent.Movies):
 
     valid_names = list()
 
-    if 'artworkUrl100' in itunes_store_dict['artworkUrl100']:
+    if 'artworkUrl100' in itunes_store_dict:
         url = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "2000x2000bb-100")
 
+        valid_names.append(url)
+
         if url not in metadata.posters:
-            try:
-                metadata.posters[url] = Proxy.Preview(HTTP.Request(url, sleep=0.5).content, sort_order=100)
-                valid_names.append(url)
+            try: metadata.posters[url] = Proxy.Preview(HTTP.Request(itunes_store_dict['artworkUrl100']).content, sort_order=1)
             except:
                 try:
-                    metadata.posters[itunes_store_dict['artworkUrl100']] = Proxy.Preview(HTTP.Request(itunes_store_dict['artworkUrl100'], sleep=0.5).content, sort_order=1)
+                    metadata.posters[itunes_store_dict['artworkUrl100']] = Proxy.Preview(HTTP.Request(itunes_store_dict['artworkUrl100'], sleep=0.5).content, sort_order=100)
                     valid_names.append(itunes_store_dict['artworkUrl100'])
                 except:
                   pass
-
     metadata.posters.validate_keys(valid_names)
 
 ####################################################################################################
