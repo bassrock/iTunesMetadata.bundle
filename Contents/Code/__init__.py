@@ -124,8 +124,14 @@ def GetFindableJSON(url, cache_time=CACHE_1MONTH):
   return findable_dict
 ####################################################################################################
 @expose
-def GetSelectedFindableTVSeasonJSON(the_tvdb_id, season_id):
-  json = GetFindableJSON(FINDABLE_TV_SEASON_SEARCH % (the_tvdb_id, season_id))
+def GetSelectedFindableTVSeasonJSON(the_tvdb_id, season_id = None):
+  json = None
+
+  if season_id is None:
+    json = GetFindableJSON(FINDABLE_TV_SEARCH % (the_tvdb_id))
+  else:
+    json = GetFindableJSON(FINDABLE_TV_SEASON_SEARCH % (the_tvdb_id, season_id))
+
 
   if json is not None and "results" in json and len(json["results"]) > 0 and "program" in json["results"][0] and "selectedSeason" in json["results"][0]["program"]:
       return json["results"][0]["program"]["selectedSeason"]
@@ -140,7 +146,7 @@ def SearchFindableJSONForSeasonId(findable_seasons, season_number):
   return None
 ####################################################################################################
 @expose
-def GetiTunesIDForFindableTVSeason(the_tvdb_id, season_id):
+def GetiTunesIDForFindableTVSeason(the_tvdb_id, season_id = None):
   selectedSeason = GetSelectedFindableTVSeasonJSON(the_tvdb_id, season_id)
 
   if selectedSeason is None or "sources" not in selectedSeason or len(selectedSeason["sources"]) == 0:
@@ -349,6 +355,36 @@ class iTunesStoreAgent(Agent.TV_Shows):
         return None
 
     Log(findable_seasons)
+
+
+    itunesID = GetiTunesIDForFindableTVSeason(tvdb_id)
+
+    itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE % (itunesID, countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
+
+    if isinstance(itunes_store_dict, dict) and 'results' in itunes_store_dict and len(itunes_store_dict['results']) > 0:
+        itunes_store_dict = itunes_store_dict['results'][0]
+
+        Log(itunes_store_dict)
+
+        # Season poster.
+        valid_names = list()
+
+        if 'artworkUrl100' in itunes_store_dict:
+            url = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "20000x20000bb-100")
+
+            previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "1000x1000bb-85")
+
+            valid_names.append(url)
+
+            if url not in metadata.posters:
+                try: metadata.posters[url] = Proxy.Preview(HTTP.Request(previewURL).content, sort_order=1)
+                except:
+                    try:
+                        metadata.posters[itunes_store_dict['artworkUrl100']] = Proxy.Preview(HTTP.Request(itunes_store_dict['artworkUrl100'], sleep=0.5).content, sort_order=100)
+                        valid_names.append(itunes_store_dict['artworkUrl100'])
+                    except:
+                      pass
+        metadata.posters.validate_keys(valid_names)
 
     # Get episode data.
     @parallelize
