@@ -3,9 +3,9 @@
 # 3.0 API update by ToMM
 
 import countrycode
-import json,urllib
+import json,urllib,urllib2
+import os.path
 
-from urllib2 import urlopen
 from HTMLParser import HTMLParser
 from urlparse import urlparse
 from urlparse import parse_qs
@@ -24,7 +24,23 @@ FANTV_MOVIE = 'https://www.fan.tv/movies/%s'
 FANTV_TV = 'https://www.fan.tv/shows/%s'
 
 #The Movie DB
-THE_MOVIE_DB_IMDB_SEARCH_API = "https://api.themoviedb.org/3/find/%s?external_source=imdb_id&api_key=2798bf23aa9f616f20c1b1e212b2de8f"
+API_KEY = 'a3dc111e66105f6387e99393813ae4d5'
+THE_MOVIE_DB_BASE_URL = 'https://api.themoviedb.org/3'
+
+THE_MOVIE_DB_IMDB_SEARCH_API = "%s/find/%%s?external_source=imdb_id&api_key=%s" % (THE_MOVIE_DB_BASE_URL, API_KEY)
+THE_MOVIE_DB_TV_TVDB = '%s/tv/find/%%s?api_key=%s&external_source=tvdb_id' % (THE_MOVIE_DB_BASE_URL, API_KEY)
+THE_MOVIE_DB_TV_SEASON = '%s/tv/%%s/season/%%s?api_key=%s&language=%%s' % (THE_MOVIE_DB_BASE_URL, API_KEY)
+THE_MOVIE_DB_TV_IMAGES = '%s/tv/%%s/images?api_key=%s' % (THE_MOVIE_DB_BASE_URL, API_KEY)
+THE_MOVIE_DB_TV = '%s/tv/%%s?api_key=%s&append_to_response=credits&language=%%s' % (THE_MOVIE_DB_BASE_URL, API_KEY)
+
+THE_MOVIE_DB_TV_EXTERNAL = "%s/tv/%%s/external_ids?api_key=%s" % (THE_MOVIE_DB_BASE_URL, API_KEY)
+THE_MOVIE_DB_MOVIE_EXTERNAL = "%s/movie/%%s/external_ids?api_key=%s" % (THE_MOVIE_DB_BASE_URL, API_KEY)
+
+
+#Findable
+FINDABLE_TV_SEARCH = "http://www.findable.tv/json/getTvSeries?pId=%s"
+FINDABLE_TV_SEASON_SEARCH = "http://www.findable.tv/json/getTvSeries?pId=%s&sId=%s"
+
 
 LANGUAGES = [
              Locale.Language.English, Locale.Language.Czech, Locale.Language.Danish, Locale.Language.German,
@@ -45,7 +61,7 @@ def Start():
 
 ####################################################################################################
 @expose
-def GetiTunesIDFromTheMovieDBID(the_movie_db_id):
+def GetiTunesMovieIDFromTheMovieDBID(the_movie_db_id):
     url = FANTV_MOVIE % (the_movie_db_id)
     Log(url)
     #go to fan.tv with the id and parse the page for itunes
@@ -68,11 +84,11 @@ def GetiTunesIDFromTheMovieDBID(the_movie_db_id):
 
 ####################################################################################################
 @expose
-def GetiTunesIDFromIMDBID(imdb_id):
+def GetiTunesMovieIDFromIMDBID(imdb_id):
   #Run the GetTheMovieDBIDFromIMDBID
   the_movie_db_id = GetTheMovieDBIDFromIMDBID(imdb_id)
-  #Run the GetiTunesIDFromTheMovieDBID
-  return GetiTunesIDFromTheMovieDBID(the_movie_db_id)
+  #Run the GetiTunesMovieIDFromTheMovieDBID
+  return GetiTunesMovieIDFromTheMovieDBID(the_movie_db_id)
 ####################################################################################################
 @expose
 def GetTheMovieDBIDFromIMDBID(imdb_id):
@@ -89,18 +105,81 @@ def GetTheMovieDBIDFromIMDBID(imdb_id):
   the_movie_db_id = the_movie_dict['id']
 
   return the_movie_db_id
-####################################################################################################
-def GetJSON(url, cache_time=CACHE_1MONTH):
 
-  itunes_store_dict = None
+####################################################################################################
+@expose
+def GetFindableJSON(url, cache_time=CACHE_1MONTH):
+  findable_dict = None
 
   try:
-    data = urllib.urlopen(url).read()
-    itunes_store_dict = json.loads(data)
+    request_headers = {
+        "Referer": "http://www.findable.tv",
+        "X-Requested-With": "XMLHttpRequest"
+    }
+
+    findable_dict = JSON.ObjectFromURL(url, headers=request_headers, sleep=1.0)
   except:
     Log('Error fetching JSON from The URL: ' + url)
 
-  return itunes_store_dict
+  return findable_dict
+####################################################################################################
+@expose
+def GetSelectedFindableTVSeasonJSON(the_tvdb_id, season_id):
+  json = GetFindableJSON(FINDABLE_TV_SEASON_SEARCH % (the_tvdb_id, season_id))
+
+  if json is not None and "results" in json and len(json["results"]) > 0 and "program" in json["results"][0] and "selectedSeason" in json["results"][0]["program"]:
+      return json["results"][0]["program"]["selectedSeason"]
+
+  return None
+####################################################################################################
+def SearchFindableJSONForSeasonId(findable_seasons, season_number):
+  for season in findable_seasons:
+      if str(season_number) == str(season['idx']):
+          return season["seasonId"]
+
+  return None
+####################################################################################################
+@expose
+def GetiTunesIDForFindableTVSeason(the_tvdb_id, season_id):
+  selectedSeason = GetSelectedFindableTVSeasonJSON(the_tvdb_id, season_id)
+
+  if selectedSeason is None or "sources" not in selectedSeason or len(selectedSeason["sources"]) == 0:
+      return None
+
+  the_source = None
+
+  for source in selectedSeason["sources"]:
+      if source["siteName"] == "ITUNES_US":
+          the_source = source
+          break
+
+  if the_source is None or "site" not in the_source:
+      return None
+
+  iTunesURL = the_source["site"]
+
+  Log(iTunesURL)
+  if iTunesURL is None:
+      return None
+
+  path = urlparse(iTunesURL).path
+  sections = path.split("/")
+
+  baseId = sections[len(sections)-1]
+
+  return baseId.replace("id","")
+####################################################################################################
+def GetJSON(url, cache_time=CACHE_1MONTH):
+
+  the_json = None
+
+  try:
+    data = urllib.urlopen(url).read()
+    the_json = json.loads(data)
+  except:
+    Log('Error fetching JSON from The URL: ' + url)
+
+  return the_json
 
 ####################################################################################################
 class iTunesStoreAgent(Agent.Movies):
@@ -131,13 +210,13 @@ class iTunesStoreAgent(Agent.Movies):
     itunes_id = None
 
     if RE_IMDB_ID.search(metadata.id):
-      itunes_id = GetiTunesIDFromIMDBID(metadata.id)
+      itunes_id = GetiTunesMovieIDFromIMDBID(metadata.id)
       if itunes_id == None:
           return None
 
     elif media.primary_agent == 'com.plexapp.agents.themoviedb':
       moviedb_id = media.primary_metadata.id
-      itunes_id = GetiTunesIDFromTheMovieDBID(moviedb_id)
+      itunes_id = GetiTunesMovieIDFromTheMovieDBID(moviedb_id)
       if itunes_id is None:
         return None
 
@@ -201,7 +280,129 @@ class iTunesStoreAgent(Agent.Movies):
     metadata.posters.validate_keys(valid_names)
 
 ####################################################################################################
+class iTunesStoreAgent(Agent.TV_Shows):
 
+  name = 'iTunes Store'
+  languages = LANGUAGES
+  contributes_to = ['com.plexapp.agents.thetvdb', 'com.plexapp.agents.themoviedb']
+  primary_provider = False
+
+  def search(self, results, media, lang, manual):
+
+    # If search is initiated by a different, primary metadata agent.
+    # This requires to set the primary id
+    if media.primary_metadata:
+        # If TMDB is used as a secondary agent for TVDB, find the TMDB id
+        if media.primary_agent == 'com.plexapp.agents.thetvdb':
+          tmdb_dict = GetJSON(url=THE_MOVIE_DB_TV_TVDB % (media.primary_metadata.id))
+
+          if isinstance(tmdb_dict, dict) and 'tv_results' in tmdb_dict and len(tmdb_dict['tv_results']) > 0:
+            tmdb_id = tmdb_dict['tv_results'][0]['id']
+
+            results.Append(MetadataSearchResult(
+              id = str(tmdb_id),
+              score = 100
+            ))
+
+          return
+        else:
+          results.Append(MetadataSearchResult(
+              id = media.primary_metadata.id,
+              score = 100
+          ))
+
+  def update(self, metadata, media, lang):
+
+    Log("In the update function")
+
+    # Get the TVDB id from the Movie Database Agent
+    tvdb_id = Core.messaging.call_external_function(
+        'com.plexapp.agents.themoviedb',
+        'MessageKit:GetTvdbId',
+        kwargs = dict(
+            tmdb_id = metadata.id
+        )
+    )
+
+    Log("The TV DB Id: " + tvdb_id)
+
+    if tvdb_id is None:
+        return None
+
+    json = GetFindableJSON(FINDABLE_TV_SEARCH % (tvdb_id))
+
+    if json is None or "results" not in json or len(json["results"]) == 0:
+        return None
+
+    program = json["results"][0]
+
+    if "program" in program:
+        program = program["program"]
+    else:
+        return None
+
+    findable_seasons = None
+
+    if "seasons" in program and len(program["seasons"]):
+        findable_seasons = program["seasons"]
+    else:
+        return None
+
+    Log(findable_seasons)
+
+    # Get episode data.
+    @parallelize
+    def UpdateEpisodes():
+
+      # Loop over seasons.
+      for s in media.seasons:
+        season = metadata.seasons[s]
+
+
+        # Set season metadata.
+        @task
+        def UpdateSeason(season=season, s=s):
+
+            seasonId = SearchFindableJSONForSeasonId(findable_seasons, s)
+            if seasonId is None:
+                return None
+
+            Log("Season ID: " + seasonId)
+
+            itunesID = GetiTunesIDForFindableTVSeason(tvdb_id, seasonId)
+
+            Log("iTunes ID: " + itunesID)
+
+            itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE % (itunesID, countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
+
+            if not isinstance(itunes_store_dict, dict) or 'results' not in itunes_store_dict or len(itunes_store_dict['results']) == 0:
+              return None
+
+            itunes_store_dict = itunes_store_dict['results'][0]
+
+            Log(itunes_store_dict)
+
+            season.summary = itunes_store_dict['longDescription']
+
+            # Season poster.
+            valid_names = list()
+
+            if 'artworkUrl100' in itunes_store_dict:
+                url = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "20000x20000bb-100")
+
+                previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "1000x1000bb-85")
+
+                valid_names.append(url)
+
+                if url not in metadata.posters:
+                    try: season.posters[url] = Proxy.Preview(HTTP.Request(previewURL).content, sort_order=1)
+                    except:
+                        try:
+                            season.posters[itunes_store_dict['artworkUrl100']] = Proxy.Preview(HTTP.Request(itunes_store_dict['artworkUrl100'], sleep=0.5).content, sort_order=100)
+                            valid_names.append(itunes_store_dict['artworkUrl100'])
+                        except:
+                          pass
+            season.posters.validate_keys(valid_names)
 
 
 class iTunesParser(HTMLParser):
