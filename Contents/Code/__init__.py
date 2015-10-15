@@ -65,7 +65,7 @@ def GetiTunesMovieIDFromTheMovieDBID(the_movie_db_id):
     url = FANTV_MOVIE % (the_movie_db_id)
     Log(url)
     #go to fan.tv with the id and parse the page for itunes
-    html = urlopen(url).read()
+    html = urllib.urlopen(url).read()
     p = iTunesParser()
     p.feed(html)
     iTunesURL = p.iTunesURL
@@ -154,10 +154,22 @@ def GetiTunesIDForFindableTVSeason(the_tvdb_id, season_id = None):
 
   the_source = None
 
+  current_price = 0.0
+
   for source in selectedSeason["sources"]:
       if source["siteName"] == "ITUNES_US":
-          the_source = source
-          break
+          price = source["price"]
+          price = price.replace("$","")
+          price = float(price)
+          Log(price)
+          if price > current_price:
+            the_source = source
+
+  if the_source is None:
+      for source in selectedSeason["sources"]:
+          if source["siteName"] == "ITUNES_US":
+              the_source = source
+              break
 
   if the_source is None or "site" not in the_source:
       return None
@@ -354,17 +366,12 @@ class iTunesStoreAgent(Agent.TV_Shows):
     else:
         return None
 
-    Log(findable_seasons)
-
-
     itunesID = GetiTunesIDForFindableTVSeason(tvdb_id)
 
     itunes_store_dict = GetJSON(url=ITUNES_STORE_MOVIE % (itunesID, countrycode.COUNTRY_TO_CODE[Prefs["country"]]))
 
     if isinstance(itunes_store_dict, dict) and 'results' in itunes_store_dict and len(itunes_store_dict['results']) > 0:
         itunes_store_dict = itunes_store_dict['results'][0]
-
-        Log(itunes_store_dict)
 
         # Season poster.
         valid_names = list()
