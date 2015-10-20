@@ -458,7 +458,7 @@ class iTunesParser(HTMLParser):
     if tag == 'a':
       foundiTunes = False
       for name, value in attrs:
-        if name == 'data-tooltip' and value == 'iTunes':
+        if name == 'track-context' and "itunes" in value.lower():
           foundiTunes = True
       if foundiTunes:
         for name, value in attrs:
