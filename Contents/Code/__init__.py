@@ -247,38 +247,39 @@ class iTunesStoreAgent(Agent.Movies):
 
     itunes_store_dict = itunes_store_dict['results'][0]
 
-    # Title of the film.
-    metadata.title = itunes_store_dict['trackName']
+    if not Prefs['justartwork']:
+        # Title of the film.
+        metadata.title = itunes_store_dict['trackName']
 
-    # Release date.
-    try:
-      metadata.originally_available_at = Datetime.ParseDate(itunes_store_dict['releaseDate']).date()
-      metadata.year = metadata.originally_available_at.year
-    except:
-      pass
+        # Release date.
+        try:
+          metadata.originally_available_at = Datetime.ParseDate(itunes_store_dict['releaseDate']).date()
+          metadata.year = metadata.originally_available_at.year
+        except:
+          pass
 
-    # Content rating.
-    if itunes_store_dict['country'].lower() == "usa":
-      metadata.content_rating = itunes_store_dict['contentAdvisoryRating']
-    else:
-      metadata.content_rating = '%s/%s' % (itunes_store_dict['country'].lower(), itunes_store_dict['contentAdvisoryRating'])
+        # Content rating.
+        if itunes_store_dict['country'].lower() == "usa":
+          metadata.content_rating = itunes_store_dict['contentAdvisoryRating']
+        else:
+          metadata.content_rating = '%s/%s' % (itunes_store_dict['country'].lower(), itunes_store_dict['contentAdvisoryRating'])
 
 
-    # Summary.
-    metadata.summary = itunes_store_dict['longDescription']
+        # Summary.
+        metadata.summary = itunes_store_dict['longDescription']
 
-    # Runtime.
-    try: metadata.duration = int(itunes_store_dict['trackTimeMillis']) * 60 * 1000
-    except: pass
+        # Runtime.
+        try: metadata.duration = int(itunes_store_dict['trackTimeMillis']) * 60 * 1000
+        except: pass
 
-    # Genres.
-    metadata.genres.clear()
-    metadata.genres.add(itunes_store_dict['primaryGenreName'].strip())
+        # Genres.
+        metadata.genres.clear()
+        metadata.genres.add(itunes_store_dict['primaryGenreName'].strip())
 
-    # Collections.
-    metadata.collections.clear()
-    if Prefs['collections'] and 'collectionName' in itunes_store_dict:
-      metadata.collections.add(itunes_store_dict['collectionName'])
+        # Collections.
+        metadata.collections.clear()
+        if Prefs['collections'] and 'collectionName' in itunes_store_dict:
+          metadata.collections.add(itunes_store_dict['collectionName'])
 
     valid_names = list()
 

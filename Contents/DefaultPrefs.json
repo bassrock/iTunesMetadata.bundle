@@ -12,6 +12,12 @@
         "default": "false"
     },
     {
+        "id": "justartwork",
+        "label": "Use only iTunes Artwork",
+        "type": "bool",
+        "default": "false"
+    },
+    {
         "id": "country",
         "label": "Country (used for the store to search)",
         "type": "enum",
