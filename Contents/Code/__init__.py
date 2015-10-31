@@ -247,7 +247,7 @@ class iTunesStoreAgent(Agent.Movies):
 
     itunes_store_dict = itunes_store_dict['results'][0]
 
-    if not Prefs['justartwork']:
+    if Prefs['justartwork'] == False:
         # Title of the film.
         metadata.title = itunes_store_dict['trackName']
 
@@ -426,7 +426,8 @@ class iTunesStoreAgent(Agent.TV_Shows):
 
             Log(itunes_store_dict)
 
-            season.summary = itunes_store_dict['longDescription']
+            if Prefs['justartwork'] == False:
+                season.summary = itunes_store_dict['longDescription']
 
             # Season poster.
             valid_names = list()
