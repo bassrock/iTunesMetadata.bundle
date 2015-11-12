@@ -287,13 +287,13 @@ class iTunesStoreAgent(Agent.Movies):
         url = itunes_store_dict['artworkUrl100']
         previewURL = itunes_store_dict['artworkUrl100']
         if "100x100bb-85" in itunes_store_dict['artworkUrl100']:
-            url = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "4000x4000bb-100")
+            url = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "10000x10000bb-100")
             previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "1000x1000bb-100")
         elif "100x100bb" in itunes_store_dict['artworkUrl100']:
-            url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "4000x4000bb")
+            url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "10000x10000bb")
             previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb", "1000x1000bb")
         else:
-            url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "4000x4000bb")
+            url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "10000x10000bb")
             previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb", "1000x1000bb")
 
         valid_names.append(url)
@@ -391,13 +391,13 @@ class iTunesStoreAgent(Agent.TV_Shows):
             url = itunes_store_dict['artworkUrl100']
             previewURL = itunes_store_dict['artworkUrl100']
             if "100x100bb-85" in itunes_store_dict['artworkUrl100']:
-                url = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "4000x4000bb-100")
+                url = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "10000x10000bb-100")
                 previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "1000x1000bb-100")
             elif "100x100bb" in itunes_store_dict['artworkUrl100']:
-                url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "4000x4000bb")
+                url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "100000x4000bb")
                 previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb", "1000x1000bb")
             else:
-                url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "4000x4000bb")
+                url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "10000x10000bb")
                 previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb", "1000x1000bb")
 
             valid_names.append(url)
