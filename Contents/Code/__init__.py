@@ -394,7 +394,7 @@ class iTunesStoreAgent(Agent.TV_Shows):
                 url = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "10000x10000bb-100")
                 previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "1000x1000bb-100")
             elif "100x100bb" in itunes_store_dict['artworkUrl100']:
-                url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "100000x4000bb")
+                url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "10000x10000bb")
                 previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb", "1000x1000bb")
             else:
                 url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "10000x10000bb")
@@ -451,9 +451,17 @@ class iTunesStoreAgent(Agent.TV_Shows):
             valid_names = list()
 
             if 'artworkUrl100' in itunes_store_dict:
-                url = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "20000x20000bb-100")
-
-                previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "1000x1000bb-85")
+                url = itunes_store_dict['artworkUrl100']
+                previewURL = itunes_store_dict['artworkUrl100']
+                if "100x100bb-85" in itunes_store_dict['artworkUrl100']:
+                    url = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "10000x10000bb-100")
+                    previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "1000x1000bb-100")
+                elif "100x100bb" in itunes_store_dict['artworkUrl100']:
+                    url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "10000x10000bb")
+                    previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb", "1000x1000bb")
+                else:
+                    url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "10000x10000bb")
+                    previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb", "1000x1000bb")
 
                 valid_names.append(url)
 
