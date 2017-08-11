@@ -30,9 +30,6 @@ TMDB_CONFIG = '/configuration'
 
 TMDB_TV_TVDB = '/find/%s?external_source=tvdb_id'
 TMDB_MOVIE_IMDB = "/find/%s?external_source=imdb_id"
-THE_MOVIE_DB_TV_EXTERNAL = "/tv/%s/external_ids"
-THE_MOVIE_DB_MOVIE_EXTERNAL = "/movie/%s/external_ids"
-
 
 #Findable
 FINDABLE_TV_SEARCH = "http://www.findable.tv/json/getTvSeries?pId=%s"
@@ -215,7 +212,7 @@ def GetJSON(url, cache_time=CACHE_1MONTH):
   try:
    dict = JSON.ObjectFromURL(url, sleep=2.0, headers={'Accept': 'application/json'}, cacheTime=cache_time)
   except:
-    Log('Error fetching JSON from The Movie Database: %s' % (TMDB_BASE_URL % String.Quote(url, True)))
+    Log('Error fetching JSON: %s' % (TMDB_BASE_URL % String.Quote(url, True)))
 
   return dict
 
@@ -347,7 +344,11 @@ class iTunesStoreAgent(Agent.TV_Shows):
     if media.primary_metadata:
         # If TMDB is used as a secondary agent for TVDB, find the TMDB id
         if media.primary_agent == 'com.plexapp.agents.thetvdb':
-          tmdb_dict = GetJSON(url=THE_MOVIE_DB_TV_TVDB % (media.primary_metadata.id))
+          config_dict = GetTMDBJSON(url=TMDB_CONFIG, cache_time=CACHE_1WEEK * 2)
+          if config_dict is None or 'images' not in config_dict or 'base_url' not in config_dict['images']:
+              config_dict = dict(images=dict(base_url=''))
+
+          tmdb_dict = GetTMDBJSON(url=TMDB_TV_TVDB % (media.primary_metadata.id))
 
           if isinstance(tmdb_dict, dict) and 'tv_results' in tmdb_dict and len(tmdb_dict['tv_results']) > 0:
             tmdb_id = tmdb_dict['tv_results'][0]['id']
@@ -489,6 +490,7 @@ class iTunesStoreAgent(Agent.TV_Shows):
 
                 valid_names.append(url)
 
+            #Change jpg to lsr and we have apple tv parallax images
                 if url not in metadata.posters:
                     try: season.posters[url] = Proxy.Preview(HTTP.Request(previewURL).content, sort_order=1)
                     except:
