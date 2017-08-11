@@ -19,17 +19,13 @@ ID_BASE_URL = 'https://itunes.apple.com/lookup'
 
 # Movies
 ITUNES_STORE_MOVIE = '%s?id=%%s&country=%%s' % (ID_BASE_URL)
-FANTV_MOVIE_API = 'https://api.fan.tv/1.0/metadata/fantv/movies/%s/synonym_ids?access_token=%s'
 
-FANTV_MOVIE = 'https://www.fan.tv/movies/%s'
-FANTV_TV = 'https://www.fan.tv/shows/%s'
 
-#The Movie DB
-TMDB_BASE_URL = 'http://127.0.0.1:32400/services/tmdb?uri=%s'
-TMDB_CONFIG = '/configuration'
+TRAKT_IMDB_MOVIE = 'https://trakt.tv/search/imdb/%s'
+TRAKT_TMDB_MOVIE = 'https://trakt.tv/search/tmdb/%s?type=movie'
 
-TMDB_TV_TVDB = '/find/%s?external_source=tvdb_id'
-TMDB_MOVIE_IMDB = "/find/%s?external_source=imdb_id"
+TRAKT_WATCH_NOW = 'https://trakt.tv%s'
+
 
 #Findable
 FINDABLE_TV_SEARCH = "http://www.findable.tv/json/getTvSeries?pId=%s"
@@ -55,75 +51,35 @@ def Start():
 
 ####################################################################################################
 @expose
-def GetiTunesMovieIDFromTheMovieDBID(the_movie_db_id):
-    ## For now the api needs to be registered and we dont have that.
-    # fantvapi = Prefs["fantvapi"]
-    #
-    # url = FANTV_MOVIE_API % (the_movie_db_id, fantvapi)
-    # Log(url)
-    #
-    # fan_tv_dict = GetJSON(url)
-    #
-    # if not fan_tv_dict["data"]:
-    #     return None
-    #
-    # for id in fan_tv_dict["data"]:
-    #     Log(id["source"])
-    #     if "itunes" in id["source"]:
-    #         return id['id']["key"]
-
-    url = FANTV_MOVIE % (the_movie_db_id)
+def GetiTunesMovieIDFromTraktURL(url):
     Log(url)
 
+    #go to fan.tv with the id and parse the page for itunes
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    #go to fan.tv with the id and parse the page for itunes
-    html = urllib2.urlopen(url, context=ctx).read()
-    p = iTunesParser()
+
+    # Go To Trakt with the url and get the final redirect url then add streaming links
+    res = urllib2.urlopen(url, context=ctx)
+    finalurl = res.geturl()
+    url2 = finalurl + '/streaming_links'
+    Log(url2)
+    html = urllib2.urlopen(url2, context=ctx).read()
+    p = WatchNowParser()
     p.feed(html)
-    iTunesURL = p.iTunesURL
+    watchNowURL = p.watchNowURL
     p.close()
+
+    res = urllib2.urlopen(TRAKT_WATCH_NOW % watchNowURL, context=ctx)
+    iTunesURL = res.geturl()
     Log(iTunesURL)
     if iTunesURL is None:
         return None
 
     parsed_result = urlparse(iTunesURL)
-    result = parse_qs(parsed_result.query)
-
-    if "id" in result:
-        return result['id'][0]
-
-    return None
-
-####################################################################################################
-@expose
-def GetiTunesMovieIDFromIMDBID(imdb_id):
-  #Run the GetTheMovieDBIDFromIMDBID
-  the_movie_db_id = GetTheMovieDBIDFromIMDBID(imdb_id)
-  #Run the GetiTunesMovieIDFromTheMovieDBID
-  return GetiTunesMovieIDFromTheMovieDBID(the_movie_db_id)
-
-####################################################################################################
-@expose
-def GetTheMovieDBIDFromIMDBID(imdb_id):
-  config_dict = GetTMDBJSON(url=TMDB_CONFIG, cache_time=CACHE_1WEEK * 2)
-  if config_dict is None or 'images' not in config_dict or 'base_url' not in config_dict['images']:
-    config_dict = dict(images=dict(base_url=''))
-
-  #search api of the movie db with the imdb id.
-  tmdb_dict = GetTMDBJSON(url=TMDB_MOVIE_IMDB % (imdb_id))
-
-  Log(TMDB_MOVIE_IMDB % (imdb_id))
-
-  if not isinstance(tmdb_dict, dict) or 'movie_results' not in tmdb_dict or len(tmdb_dict['movie_results']) == 0:
-    Log('No Results from the movie db')
-    return None
-
-  tmdb_dict = tmdb_dict['movie_results'][0]
-  the_movie_db_id = tmdb_dict['id']
-
-  return the_movie_db_id
+    path_parts = parsed_result[2].rpartition('/')
+    id = path_parts[-1].replace("id", "")
+    return id
 
 ####################################################################################################
 @expose
@@ -212,21 +168,9 @@ def GetJSON(url, cache_time=CACHE_1MONTH):
   try:
    dict = JSON.ObjectFromURL(url, sleep=2.0, headers={'Accept': 'application/json'}, cacheTime=cache_time)
   except:
-    Log('Error fetching JSON: %s' % (TMDB_BASE_URL % String.Quote(url, True)))
+    Log('Error fetching JSON: %s' % url)
 
   return dict
-
-####################################################################################################
-def GetTMDBJSON(url, cache_time=CACHE_1MONTH):
-
-  tmdb_dict = None
-
-  try:
-    tmdb_dict = JSON.ObjectFromURL(TMDB_BASE_URL % String.Quote(url, True), sleep=2.0, headers={'Accept': 'application/json'}, cacheTime=cache_time)
-  except:
-    Log('Error fetching JSON from The Movie Database: %s' % (TMDB_BASE_URL % String.Quote(url, True)))
-
-  return tmdb_dict
 
 ####################################################################################################
 class iTunesStoreAgent(Agent.Movies):
@@ -254,8 +198,7 @@ class iTunesStoreAgent(Agent.Movies):
 
     Log("In the update function")
 
-    itunes_id = None
-    itunes_id = GetiTunesMovieIDFromIMDBID(metadata.id)
+    itunes_id = GetiTunesMovieIDFromTraktURL((TRAKT_IMDB_MOVIE % metadata.id))
     if itunes_id is None:
         return None
 
@@ -334,49 +277,22 @@ class iTunesStoreAgent(Agent.TV_Shows):
 
   name = 'iTunes Store'
   languages = LANGUAGES
-  contributes_to = ['com.plexapp.agents.thetvdb', 'com.plexapp.agents.themoviedb']
+  contributes_to = ['com.plexapp.agents.thetvdb']
   primary_provider = False
+  
 
   def search(self, results, media, lang, manual):
 
-    # If search is initiated by a different, primary metadata agent.
-    # This requires to set the primary id
-    if media.primary_metadata:
-        # If TMDB is used as a secondary agent for TVDB, find the TMDB id
-        if media.primary_agent == 'com.plexapp.agents.thetvdb':
-          config_dict = GetTMDBJSON(url=TMDB_CONFIG, cache_time=CACHE_1WEEK * 2)
-          if config_dict is None or 'images' not in config_dict or 'base_url' not in config_dict['images']:
-              config_dict = dict(images=dict(base_url=''))
-
-          tmdb_dict = GetTMDBJSON(url=TMDB_TV_TVDB % (media.primary_metadata.id))
-
-          if isinstance(tmdb_dict, dict) and 'tv_results' in tmdb_dict and len(tmdb_dict['tv_results']) > 0:
-            tmdb_id = tmdb_dict['tv_results'][0]['id']
-
-            results.Append(MetadataSearchResult(
-              id = str(tmdb_id),
-              score = 100
-            ))
-
-          return
-        else:
-          results.Append(MetadataSearchResult(
-              id = media.primary_metadata.id,
-              score = 100
-          ))
+    results.Append(MetadataSearchResult(
+        id = media.primary_metadata.id,
+        score = 100
+    ))
 
   def update(self, metadata, media, lang):
 
     Log("In the update function")
 
-    # Get the TVDB id from the Movie Database Agent
-    tvdb_id = Core.messaging.call_external_function(
-        'com.plexapp.agents.themoviedb',
-        'MessageKit:GetTvdbId',
-        kwargs = dict(
-            tmdb_id = metadata.id
-        )
-    )
+    tvdb_id = metadata.id
 
     Log("The TV DB Id: " + tvdb_id)
 
@@ -502,19 +418,19 @@ class iTunesStoreAgent(Agent.TV_Shows):
             season.posters.validate_keys(valid_names)
 
 
-class iTunesParser(HTMLParser):
+class WatchNowParser(HTMLParser):
 
   def __init__(self):
     HTMLParser.__init__(self)
     self.recording = 0
-    self.iTunesURL = None
+    self.watc = None
   def handle_starttag(self, tag, attrs):
     if tag == 'a':
       foundiTunes = False
       for name, value in attrs:
-        if name == 'track-context' and "itunes" in value.lower():
+        if name == 'data-source' and "itunes" in value.lower():
           foundiTunes = True
       if foundiTunes:
         for name, value in attrs:
             if name == 'href':
-                self.iTunesURL = value
+                self.watchNowURL = value
