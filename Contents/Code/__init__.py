@@ -3,7 +3,7 @@
 # 3.0 API update by ToMM
 
 import countrycode
-import json,urllib,urllib2
+import json,urllib,urllib2,ssl
 import os.path
 
 from HTMLParser import HTMLParser
@@ -19,22 +19,19 @@ ID_BASE_URL = 'https://itunes.apple.com/lookup'
 
 # Movies
 ITUNES_STORE_MOVIE = '%s?id=%%s&country=%%s' % (ID_BASE_URL)
-FANTV_MOVIE = 'https://www.fan.tv/movies/%s'
+FANTV_MOVIE_API = 'https://api.fan.tv/1.0/metadata/fantv/movies/%s/synonym_ids?access_token=%s'
 
+FANTV_MOVIE = 'https://www.fan.tv/movies/%s'
 FANTV_TV = 'https://www.fan.tv/shows/%s'
 
 #The Movie DB
-API_KEY = 'a3dc111e66105f6387e99393813ae4d5'
-THE_MOVIE_DB_BASE_URL = 'https://api.themoviedb.org/3'
+TMDB_BASE_URL = 'http://127.0.0.1:32400/services/tmdb?uri=%s'
+TMDB_CONFIG = '/configuration'
 
-THE_MOVIE_DB_IMDB_SEARCH_API = "%s/find/%%s?external_source=imdb_id&api_key=%s" % (THE_MOVIE_DB_BASE_URL, API_KEY)
-THE_MOVIE_DB_TV_TVDB = '%s/tv/find/%%s?api_key=%s&external_source=tvdb_id' % (THE_MOVIE_DB_BASE_URL, API_KEY)
-THE_MOVIE_DB_TV_SEASON = '%s/tv/%%s/season/%%s?api_key=%s&language=%%s' % (THE_MOVIE_DB_BASE_URL, API_KEY)
-THE_MOVIE_DB_TV_IMAGES = '%s/tv/%%s/images?api_key=%s' % (THE_MOVIE_DB_BASE_URL, API_KEY)
-THE_MOVIE_DB_TV = '%s/tv/%%s?api_key=%s&append_to_response=credits&language=%%s' % (THE_MOVIE_DB_BASE_URL, API_KEY)
-
-THE_MOVIE_DB_TV_EXTERNAL = "%s/tv/%%s/external_ids?api_key=%s" % (THE_MOVIE_DB_BASE_URL, API_KEY)
-THE_MOVIE_DB_MOVIE_EXTERNAL = "%s/movie/%%s/external_ids?api_key=%s" % (THE_MOVIE_DB_BASE_URL, API_KEY)
+TMDB_TV_TVDB = '/find/%s?external_source=tvdb_id'
+TMDB_MOVIE_IMDB = "/find/%s?external_source=imdb_id"
+THE_MOVIE_DB_TV_EXTERNAL = "/tv/%s/external_ids"
+THE_MOVIE_DB_MOVIE_EXTERNAL = "/movie/%s/external_ids"
 
 
 #Findable
@@ -62,10 +59,30 @@ def Start():
 ####################################################################################################
 @expose
 def GetiTunesMovieIDFromTheMovieDBID(the_movie_db_id):
+    ## For now the api needs to be registered and we dont have that.
+    # fantvapi = Prefs["fantvapi"]
+    #
+    # url = FANTV_MOVIE_API % (the_movie_db_id, fantvapi)
+    # Log(url)
+    #
+    # fan_tv_dict = GetJSON(url)
+    #
+    # if not fan_tv_dict["data"]:
+    #     return None
+    #
+    # for id in fan_tv_dict["data"]:
+    #     Log(id["source"])
+    #     if "itunes" in id["source"]:
+    #         return id['id']["key"]
+
     url = FANTV_MOVIE % (the_movie_db_id)
     Log(url)
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     #go to fan.tv with the id and parse the page for itunes
-    html = urllib.urlopen(url).read()
+    html = urllib2.urlopen(url, context=ctx).read()
     p = iTunesParser()
     p.feed(html)
     iTunesURL = p.iTunesURL
@@ -89,20 +106,25 @@ def GetiTunesMovieIDFromIMDBID(imdb_id):
   the_movie_db_id = GetTheMovieDBIDFromIMDBID(imdb_id)
   #Run the GetiTunesMovieIDFromTheMovieDBID
   return GetiTunesMovieIDFromTheMovieDBID(the_movie_db_id)
+
 ####################################################################################################
 @expose
 def GetTheMovieDBIDFromIMDBID(imdb_id):
+  config_dict = GetTMDBJSON(url=TMDB_CONFIG, cache_time=CACHE_1WEEK * 2)
+  if config_dict is None or 'images' not in config_dict or 'base_url' not in config_dict['images']:
+    config_dict = dict(images=dict(base_url=''))
+
   #search api of the movie db with the imdb id.
-  the_movie_dict = GetJSON(url=THE_MOVIE_DB_IMDB_SEARCH_API % (imdb_id))
+  tmdb_dict = GetTMDBJSON(url=TMDB_MOVIE_IMDB % (imdb_id))
 
-  Log(THE_MOVIE_DB_IMDB_SEARCH_API % (imdb_id))
+  Log(TMDB_MOVIE_IMDB % (imdb_id))
 
-  if not isinstance(the_movie_dict, dict) or 'movie_results' not in the_movie_dict or len(the_movie_dict['movie_results']) == 0:
+  if not isinstance(tmdb_dict, dict) or 'movie_results' not in tmdb_dict or len(tmdb_dict['movie_results']) == 0:
     Log('No Results from the movie db')
     return None
 
-  the_movie_dict = the_movie_dict['movie_results'][0]
-  the_movie_db_id = the_movie_dict['id']
+  tmdb_dict = tmdb_dict['movie_results'][0]
+  the_movie_db_id = tmdb_dict['id']
 
   return the_movie_db_id
 
@@ -188,23 +210,33 @@ def GetiTunesIDForFindableTVSeason(the_tvdb_id, season_id = None):
   return baseId.replace("id","")
 ####################################################################################################
 def GetJSON(url, cache_time=CACHE_1MONTH):
-
-  the_json = None
+  dict = None
 
   try:
-    data = urllib.urlopen(url).read()
-    the_json = json.loads(data)
+   dict = JSON.ObjectFromURL(url, sleep=2.0, headers={'Accept': 'application/json'}, cacheTime=cache_time)
   except:
-    Log('Error fetching JSON from The URL: ' + url)
+    Log('Error fetching JSON from The Movie Database: %s' % (TMDB_BASE_URL % String.Quote(url, True)))
 
-  return the_json
+  return dict
+
+####################################################################################################
+def GetTMDBJSON(url, cache_time=CACHE_1MONTH):
+
+  tmdb_dict = None
+
+  try:
+    tmdb_dict = JSON.ObjectFromURL(TMDB_BASE_URL % String.Quote(url, True), sleep=2.0, headers={'Accept': 'application/json'}, cacheTime=cache_time)
+  except:
+    Log('Error fetching JSON from The Movie Database: %s' % (TMDB_BASE_URL % String.Quote(url, True)))
+
+  return tmdb_dict
 
 ####################################################################################################
 class iTunesStoreAgent(Agent.Movies):
 
   name = 'iTunes Store'
   languages = LANGUAGES
-  contributes_to = ['com.plexapp.agents.imdb', 'com.plexapp.agents.themoviedb']
+  contributes_to = ['com.plexapp.agents.imdb']
   primary_provider = False
 
   def search(self, results, media, lang, manual):
@@ -226,16 +258,8 @@ class iTunesStoreAgent(Agent.Movies):
     Log("In the update function")
 
     itunes_id = None
-
-    if RE_IMDB_ID.search(metadata.id):
-      itunes_id = GetiTunesMovieIDFromIMDBID(metadata.id)
-      if itunes_id == None:
-          return None
-
-    elif media.primary_agent == 'com.plexapp.agents.themoviedb':
-      moviedb_id = media.primary_metadata.id
-      itunes_id = GetiTunesMovieIDFromTheMovieDBID(moviedb_id)
-      if itunes_id is None:
+    itunes_id = GetiTunesMovieIDFromIMDBID(metadata.id)
+    if itunes_id is None:
         return None
 
     Log('In the update function with the itunes id of ' + itunes_id)
@@ -288,13 +312,13 @@ class iTunesStoreAgent(Agent.Movies):
         previewURL = itunes_store_dict['artworkUrl100']
         if "100x100bb-85" in itunes_store_dict['artworkUrl100']:
             url = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "10000x10000bb-100")
-            previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "1000x1000bb-100")
+            previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb-85", "10000x10000bb-100")
         elif "100x100bb" in itunes_store_dict['artworkUrl100']:
             url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "10000x10000bb")
-            previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb", "1000x1000bb")
+            previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb", "10000x10000bb")
         else:
             url = itunes_store_dict['artworkUrl100'].replace("100x100bb", "10000x10000bb")
-            previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb", "1000x1000bb")
+            previewURL = itunes_store_dict['artworkUrl100'].replace("100x100bb", "10000x10000bb")
 
         valid_names.append(url)
 
