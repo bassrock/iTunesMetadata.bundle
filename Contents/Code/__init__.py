@@ -423,7 +423,7 @@ class WatchNowParser(HTMLParser):
   def __init__(self):
     HTMLParser.__init__(self)
     self.recording = 0
-    self.watc = None
+    self.watchNowURL = None
   def handle_starttag(self, tag, attrs):
     if tag == 'a':
       foundiTunes = False
