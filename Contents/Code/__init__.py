@@ -70,6 +70,9 @@ def GetiTunesMovieIDFromTraktURL(url):
     watchNowURL = p.watchNowURL
     p.close()
 
+    if watchNowURL == None:
+        return None
+
     res = urllib2.urlopen(TRAKT_WATCH_NOW % watchNowURL, context=ctx)
     iTunesURL = res.geturl()
     Log(iTunesURL)
